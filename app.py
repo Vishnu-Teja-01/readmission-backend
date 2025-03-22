@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import pandas as pd
 import numpy as np
 import joblib
+import xgboost as xgb
 from flask_cors import CORS
 from datetime import datetime
 
@@ -11,30 +12,23 @@ CORS(app)  # Allow cross-origin requests for local testing
 # Load the trained model
 try:
     model = joblib.load('optimized_xgb_model.pkl')
+    # Define the expected features based on the simplified inputs
+    expected_features = [
+        'Age', 'ChronicDiseaseCount', 'LengthOfStay', 'EmergencyVisit', 'InpatientVisit',
+        'OutpatientVisit', 'TotalVisits', 'Hemoglobin', 'CardiacTroponin',
+        'DischargeDisposision_Home', 'DischargeDisposision_Hospice - Home', 'DischargeDisposision_SNF',
+        'Gender_Male',
+        'Race_White', 'Race_Unknown',
+        'DiabetesMellitus_DM', 'DiabetesMellitus_Unknown',
+        'ChronicKidneyDisease_CKD', 'ChronicKidneyDisease_Unknown',
+        'Anemia_Anemia', 'Anemia_Unknown',
+        'Depression_Depression', 'Depression_Unknown',
+        'ChronicObstructivePulmonaryDisease_COPD', 'ChronicObstructivePulmonaryDisease_Unknown'
+    ]
 except FileNotFoundError:
     raise FileNotFoundError("Model file 'optimized_xgb_model.pkl' not found. Ensure it is in the same directory as app.py.")
-
-# Define the expected features (same as X_train in your notebook)
-expected_features = [
-    'Age', 'ChronicDiseaseCount', 'LengthOfStay', 'EmergencyVisit', 'InpatientVisit',
-    'OutpatientVisit', 'TotalVisits', 'BMIMin', 'BMIMax', 'BMIMedian', 'BMIMean',
-    'BPDiastolicMin', 'BPDiastolicMax', 'BPDiastolicMedian', 'BPDiastolicMean',
-    'BPSystolicMin', 'BPSystolicMax', 'BPSystolicMedian', 'BPSystolicMean',
-    'TemperatureMin', 'TemperatureMax', 'TemperatureMedian', 'TemperatureMean',
-    'HeartRateMin', 'HeartRateMax', 'HeartRateMedian', 'HeartRateMean',
-    'PulseRateMin', 'PulseRateMax', 'PulseRateMedian', 'PulseRateMean',
-    'RespiratoryRateMin', 'RespiratoryRateMax', 'RespiratoryRateMedian', 'RespiratoryRateMean',
-    'ACEInhibitors', 'ARBs', 'BetaBlockers', 'Diuretics', 'TotalMedicine',
-    'CardiacTroponin', 'Hemoglobin', 'SerumSodium', 'SerumCreatinine', 'BNP', 'NT-proBNP',
-    'DischargeDisposision_Home', 'DischargeDisposision_Hospice - Home', 'DischargeDisposision_SNF',
-    'Gender_Male',
-    'Race_White', 'Race_Unknown',
-    'DiabetesMellitus_DM', 'DiabetesMellitus_Unknown',
-    'ChronicKidneyDisease_CKD', 'ChronicKidneyDisease_Unknown',
-    'Anemia_Anemia', 'Anemia_Unknown',
-    'Depression_Depression', 'Depression_Unknown',
-    'ChronicObstructivePulmonaryDisease_COPD', 'ChronicObstructivePulmonaryDisease_Unknown'
-]
+except Exception as e:
+    raise Exception(f"Error loading model: {str(e)}")
 
 def validate_blood_pressure(bp):
     try:
@@ -58,40 +52,30 @@ def predict():
         return jsonify({'error': 'Invalid JSON data in request.'}), 400
 
     # Extract form inputs with default values
-    age = float(data.get('age', 0))
-    joining_date = data.get('joiningDate', '')
-    condition = data.get('condition', '')
-    blood_pressure = data.get('bloodPressure', '120/80')
-    chronic_disease_count = float(data.get('chronicDiseaseCount', 0))
-    length_of_stay = float(data.get('lengthOfStay', 0))
-    emergency_visit = float(data.get('emergencyVisit', 0))
-    inpatient_visit = float(data.get('inpatientVisit', 0))
-    outpatient_visit = float(data.get('outpatientVisit', 0))
-    bmi = float(data.get('bmi', 0))
-    heart_rate = float(data.get('heartRate', 0))
-    respiratory_rate = float(data.get('respiratoryRate', 0))
-    temperature = float(data.get('temperature', 0))
-    hemoglobin = float(data.get('hemoglobin', 0))
-    serum_sodium = float(data.get('serumSodium', 0))
-    serum_creatinine = float(data.get('serumCreatinine', 0))
-    bnp = float(data.get('bnp', 0))
-    nt_probnp = float(data.get('ntProbnp', 0))
-    cardiac_troponin = float(data.get('cardiacTroponin', 0))
-    ace_inhibitors = float(data.get('aceInhibitors', 0))
-    arbs = float(data.get('arbs', 0))
-    beta_blockers = float(data.get('betaBlockers', 0))
-    diuretics = float(data.get('diuretics', 0))
-    total_medicine = float(data.get('totalMedicine', 0))
-    discharge_disposition = data.get('dischargeDisposition', 'Home')
-    gender = data.get('gender', 'Male')
-    race = data.get('race', 'White')
-    diabetes_mellitus = data.get('diabetesMellitus', 'DM')
-    chronic_kidney_disease = data.get('chronicKidneyDisease', 'CKD')
-    anemia = data.get('anemia', 'Anemia')
-    depression = data.get('depression', 'Depression')
-    copd = data.get('copd', 'COPD')
+    try:
+        age = float(data.get('age', 0))
+        joining_date = data.get('joiningDate', '')
+        condition = data.get('condition', '')
+        blood_pressure = data.get('bloodPressure', '120/80')
+        chronic_disease_count = float(data.get('chronicDiseaseCount', 0))
+        length_of_stay = float(data.get('lengthOfStay', 0))
+        emergency_visit = float(data.get('emergencyVisit', 0))
+        inpatient_visit = float(data.get('inpatientVisit', 0))
+        outpatient_visit = float(data.get('outpatientVisit', 0))
+        hemoglobin = float(data.get('hemoglobin', 0))
+        cardiac_troponin = float(data.get('cardiacTroponin', 0))
+        discharge_disposition = data.get('dischargeDisposition', 'Home')
+        gender = data.get('gender', 'Male')
+        race = data.get('race', 'White')
+        diabetes_mellitus = data.get('diabetesMellitus', 'DM')
+        chronic_kidney_disease = data.get('chronicKidneyDisease', 'CKD')
+        anemia = data.get('anemia', 'Anemia')
+        depression = data.get('depression', 'Depression')
+        copd = data.get('copd', 'COPD')
+    except (TypeError, ValueError) as e:
+        return jsonify({'error': f'Invalid data type in input: {str(e)}'}), 400
 
-    # Validate blood pressure
+    # Validate blood pressure (even though we won't use it for prediction)
     bp_valid, bp_result = validate_blood_pressure(blood_pressure)
     if not bp_valid:
         return jsonify({'error': bp_result}), 400
@@ -112,7 +96,7 @@ def predict():
     if condition not in valid_conditions:
         return jsonify({'error': f"Invalid condition. Must be one of {valid_conditions}."}), 400
 
-    # Prepare numerical inputs
+    # Prepare numerical inputs (simplified)
     input_data = {
         'Age': age,
         'ChronicDiseaseCount': chronic_disease_count,
@@ -121,45 +105,8 @@ def predict():
         'InpatientVisit': inpatient_visit,
         'OutpatientVisit': outpatient_visit,
         'TotalVisits': emergency_visit + inpatient_visit + outpatient_visit,
-        'BMIMin': bmi,
-        'BMIMax': bmi,
-        'BMIMedian': bmi,
-        'BMIMean': bmi,
-        'BPDiastolicMin': diastolic,
-        'BPDiastolicMax': diastolic,
-        'BPDiastolicMedian': diastolic,
-        'BPDiastolicMean': diastolic,
-        'BPSystolicMin': systolic,
-        'BPSystolicMax': systolic,
-        'BPSystolicMedian': systolic,
-        'BPSystolicMean': systolic,
-        'TemperatureMin': temperature,
-        'TemperatureMax': temperature,
-        'TemperatureMedian': temperature,
-        'TemperatureMean': temperature,
-        'HeartRateMin': heart_rate,
-        'HeartRateMax': heart_rate,
-        'HeartRateMedian': heart_rate,
-        'HeartRateMean': heart_rate,
-        'PulseRateMin': heart_rate,  # Assuming pulse rate = heart rate
-        'PulseRateMax': heart_rate,
-        'PulseRateMedian': heart_rate,
-        'PulseRateMean': heart_rate,
-        'RespiratoryRateMin': respiratory_rate,
-        'RespiratoryRateMax': respiratory_rate,
-        'RespiratoryRateMedian': respiratory_rate,
-        'RespiratoryRateMean': respiratory_rate,
-        'ACEInhibitors': ace_inhibitors,
-        'ARBs': arbs,
-        'BetaBlockers': beta_blockers,
-        'Diuretics': diuretics,
-        'TotalMedicine': total_medicine,
-        'CardiacTroponin': cardiac_troponin,
         'Hemoglobin': hemoglobin,
-        'SerumSodium': serum_sodium,
-        'SerumCreatinine': serum_creatinine,
-        'BNP': bnp,
-        'NT-proBNP': nt_probnp,
+        'CardiacTroponin': cardiac_troponin,
     }
 
     # Prepare categorical inputs
@@ -175,24 +122,40 @@ def predict():
     }
 
     # Convert to DataFrame
-    input_df = pd.DataFrame([input_data])
-    categorical_df = pd.DataFrame([categorical_data])
-    categorical_df = pd.get_dummies(categorical_df, drop_first=True)
+    try:
+        input_df = pd.DataFrame([input_data])
+        categorical_df = pd.DataFrame([categorical_data])
+        categorical_df = pd.get_dummies(categorical_df, drop_first=True)
+    except Exception as e:
+        return jsonify({'error': f'Error creating DataFrame: {str(e)}'}), 500
 
     # Combine numerical and categorical data
-    input_df = pd.concat([input_df, categorical_df], axis=1)
+    try:
+        input_df = pd.concat([input_df, categorical_df], axis=1)
+    except Exception as e:
+        return jsonify({'error': f'Error combining numerical and categorical data: {str(e)}'}), 500
 
     # Ensure all expected features are present
-    for feature in expected_features:
-        if feature not in input_df.columns:
-            input_df[feature] = 0
-    input_df = input_df[expected_features]
-
-    # Make prediction
     try:
-        probability = model.predict_proba(input_df)[:, 1][0]
+        for feature in expected_features:
+            if feature not in input_df.columns:
+                input_df[feature] = 0
+        input_df = input_df[expected_features]
+    except Exception as e:
+        return jsonify({'error': f'Error aligning features: {str(e)}'}), 500
+
+    # Replace any NaN values with 0
+    input_df = input_df.fillna(0)
+
+    # Make prediction using DMatrix
+    try:
+        dmatrix = xgb.DMatrix(input_df, feature_names=expected_features)
+        probability = model.predict(dmatrix)[0]
     except Exception as e:
         return jsonify({'error': f'Prediction failed: {str(e)}'}), 500
+
+    # Since Booster.predict returns a raw score, convert to probability (simplified)
+    probability = 1 / (1 + np.exp(-probability))
 
     # Categorize risk
     if probability <= 0.3:
