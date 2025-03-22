@@ -11,7 +11,7 @@ CORS(app)  # Allow cross-origin requests for local testing
 
 # Load the trained model
 try:
-    model = joblib.load('optimized_xgb_model.pkl')
+    model = joblib.load('optimized_xgb_model_new.pkl')
     # Define the expected features based on the simplified inputs
     expected_features = [
         'Age', 'ChronicDiseaseCount', 'LengthOfStay', 'EmergencyVisit', 'InpatientVisit',
