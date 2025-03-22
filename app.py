@@ -5,18 +5,36 @@ import joblib
 import xgboost as xgb
 from flask_cors import CORS
 from datetime import datetime
+import hashlib
+import os
 
 app = Flask(__name__)
 CORS(app)  # Allow cross-origin requests for local testing
 
+# Define the model file
+model_file = 'optimized_xgb_model_new.pkl'
+
+# Verify the model file's existence
+if not os.path.exists(model_file):
+    raise FileNotFoundError(f"Model file '{model_file}' not found. Ensure it is in the same directory as app.py.")
+
+# Calculate hash of the model file for security
+with open(model_file, 'rb') as f:
+    file_hash = hashlib.sha256(f.read()).hexdigest()
+
+# Replace with the actual hash of your .pkl file (we'll calculate this below)
+expected_hash = 'your_hash_here'
+if file_hash != expected_hash:
+    raise ValueError("Model file hash does not match. Possible tampering detected.")
+
 # Load the trained model
 try:
-    model = joblib.load('optimized_xgb_model_new.pkl')
+    model = joblib.load(model_file)
     # Define the expected features based on the simplified inputs
     expected_features = [
         'Age', 'ChronicDiseaseCount', 'LengthOfStay', 'EmergencyVisit', 'InpatientVisit',
         'OutpatientVisit', 'TotalVisits', 'Hemoglobin', 'CardiacTroponin',
-        'DischargeDisposision_Home', 'DischargeDisposision_Hospice - Home', 'DischargeDisposision_SNF',
+        'DischargeDisposition_Home', 'DischargeDisposition_Hospice - Home', 'DischargeDisposition_SNF',  # Fixed typo
         'Gender_Male',
         'Race_White', 'Race_Unknown',
         'DiabetesMellitus_DM', 'DiabetesMellitus_Unknown',
@@ -25,10 +43,8 @@ try:
         'Depression_Depression', 'Depression_Unknown',
         'ChronicObstructivePulmonaryDisease_COPD', 'ChronicObstructivePulmonaryDisease_Unknown'
     ]
-except FileNotFoundError:
-    raise FileNotFoundError("Model file 'optimized_xgb_model.pkl' not found. Ensure it is in the same directory as app.py.")
 except Exception as e:
-    raise Exception(f"Error loading model: {str(e)}")
+    raise RuntimeError(f"Error loading model: {str(e)}")
 
 def validate_blood_pressure(bp):
     try:
@@ -83,7 +99,7 @@ def predict():
 
     # Calculate days since joining
     try:
-        today = datetime.strptime('2025-03-21', '%Y-%m-%d')
+        today = datetime.strptime('2025-03-22', '%Y-%m-%d')  # Updated to current date
         join_date = datetime.strptime(joining_date, '%Y-%m-%d')
         days_since_joining = max(0, (today - join_date).days)
         if days_since_joining > 365:
@@ -111,7 +127,7 @@ def predict():
 
     # Prepare categorical inputs
     categorical_data = {
-        'DischargeDisposision': discharge_disposition,
+        'DischargeDisposition': discharge_disposition,  # Fixed typo
         'Gender': gender,
         'Race': race,
         'DiabetesMellitus': diabetes_mellitus,
@@ -181,4 +197,4 @@ def predict():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', port=5000)  # Changed for Render compatibility
